@@ -13,11 +13,11 @@
 #define TRUE  1
 
 // The base size of the input buffer to be allocated
-#define BASE_BUFF_SIZE 512
+#define BASE_BUFF_SIZE 4096
 
 // The amount of bytes to be read as a time. This is also the amount
 // of bytes the buffer is enlarged by when it runs out of space
-#define READ_CHUNK_SIZE 64
+#define READ_CHUNK_SIZE 2048
 
 // TYPE DEFINITIONS
 
@@ -49,6 +49,25 @@ typedef struct bulk_t {
 
 // SIGNAL HANDLERS
 
+// INPUT FUNCTIONS
+
+static int advance_page(bulk_t *bulk) {
+  if (bulk->current_page + 1 == bulk->page_count) return FALSE;
+  bulk->current_page++;
+  return TRUE;
+}
+
+static int process_inputs(bulk_t *bulk) {
+  char response;
+  while (read(2, &response, 1)) {
+    switch (response) {
+    case 'n':
+      return advance_page(bulk);
+    }
+  }
+  return FALSE;
+}
+
 // DISPLAY FUNCTIONS
 
 static void show(bulk_t bulk) {
@@ -56,16 +75,26 @@ static void show(bulk_t bulk) {
 
   printf("\x1b[2J\x1b[0;0f");
 
+  int page_ended = FALSE;
   unsigned char nrow = 0;
-  for (size_t chr = page_start; chr < bulk.buff_size; chr++) {
+  size_t chr;
+  for (chr = page_start; chr < bulk.buff_size; chr++) {
     if (bulk.buff[chr] == '\n') nrow++;
     printf("%.*s", 1, bulk.buff + chr);
-    fflush(stdout);
-    if (nrow >= bulk.nrows) break;
+    if (nrow >= bulk.nrows) {
+      page_ended = TRUE;
+      break;
+    }
   }
+
+  if (page_ended == TRUE && bulk.current_page + 1 >= bulk.page_count) {
+    bulk.pages = xrealloc(bulk.pages, sizeof(size_t) * (bulk.page_count + 1));
+    bulk.pages[bulk.page_count] = chr + 1;
+    bulk.page_count++;
+  }
+
   for (; nrow < bulk.nrows; nrow++) printf("\n");
-  printf("%d %d\n", bulk.nrows, nrow);
-  //printf("%s\n", page_start);
+  printf("PAGE %zu/%zu\n", bulk.current_page + 1, bulk.page_count);
 }
 
 int main(int argc, char **argv) {
@@ -100,10 +129,12 @@ int main(int argc, char **argv) {
       bulk.buff_allocd += READ_CHUNK_SIZE;
     }
 
-    if (bytes_read <= 0) continue;
+    if (bytes_read <= 0 && process_inputs(&bulk) != TRUE)
+      continue;
     show(bulk);
   }
 
+  free(bulk.pages);
   free(bulk.buff);
   return 0;
 }
