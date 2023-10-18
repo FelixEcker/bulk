@@ -6,13 +6,14 @@ sector .config
     str includes ''
 
   fields mariebuild:
-    str binname   ''
-    str compiler 'gcc'
+    str binname   'bulk'
+    str compiler 'clang'
 
-    list files ''
+    list files 'bulk.c'
 
     str std_flags     '-Wall $(depends/includes) -c -o'
     str debug_flags   '-ggdb'
     str release_flags '-O3'
 
     str comp_cmd '$(compiler) $(mode_flags) $(std_flags) out/$(file).o src/$(file)'
+    str finalize_cmd '$(compiler) $(mode_flags) -o $(binname) out/$(files).o'
