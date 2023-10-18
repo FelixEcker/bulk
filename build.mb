@@ -3,13 +3,13 @@ sector .config
   ; author: Marie Eckert
 
   fields depends:
-    str includes ''
+    str includes '-Isrc/'
 
   fields mariebuild:
     str binname   'bulk'
     str compiler 'clang'
 
-    list files 'bulk.c'
+    list files 'xmem.c:bulk.c'
 
     str std_flags     '-Wall $(depends/includes) -c -o'
     str debug_flags   '-ggdb'
