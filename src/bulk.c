@@ -42,7 +42,7 @@ typedef struct bulk_t {
   size_t buff_allocd;
   
   // Pages
-  char **pages;
+  size_t *pages;
   size_t page_count;
   size_t current_page;
 } bulk_t;
@@ -52,10 +52,20 @@ typedef struct bulk_t {
 // DISPLAY FUNCTIONS
 
 static void show(bulk_t bulk) {
-  printf("\x1b[2J\x1b[0;0");
-  for (size_t li = 0; li < bulk.line_count; li++)
-    printf("%.*s", (int) bulk.lines[li].length, 
-                   bulk.buff + bulk.lines[li].start);
+  size_t page_start = bulk.pages[bulk.current_page];
+
+  printf("\x1b[2J\x1b[0;0f");
+
+  unsigned char nrow = 0;
+  for (size_t chr = page_start; chr < bulk.buff_size; chr++) {
+    if (bulk.buff[chr] == '\n') nrow++;
+    printf("%.*s", 1, bulk.buff + chr);
+    fflush(stdout);
+    if (nrow >= bulk.nrows) break;
+  }
+  for (; nrow < bulk.nrows; nrow++) printf("\n");
+  printf("%d %d\n", bulk.nrows, nrow);
+  //printf("%s\n", page_start);
 }
 
 int main(int argc, char **argv) {
@@ -66,23 +76,22 @@ int main(int argc, char **argv) {
     .buff = xmalloc(BASE_BUFF_SIZE),
     .buff_size = 0,
     .buff_allocd = BASE_BUFF_SIZE,
-    .lines = xmalloc(sizeof(line_t)),
-    .line_count = 0,
-    .cline = 0,
+    .pages = malloc(sizeof(size_t)),
+    .page_count = 1,
+    .current_page = 0
   };
 
+  bulk.pages[0] = 0;
+
   struct winsize ws;
-  ioctl(0, TIOCGWINSZ, &ws);
+  ioctl(1, TIOCGWINSZ, &ws);
   bulk.ncols = ws.ws_col;
   bulk.nrows = ws.ws_row - 1;
 
   if (bulk.minimal_mode == FALSE)
     bulk.nrows -= 1;
 
-  size_t remainder = 0;
-  size_t last_bufpos = 0;
   while (1) {
-    size_t bufpos = bulk.buff_size;
     size_t bytes_read = read(STDIN_FILENO, bulk.buff+bulk.buff_size, 
                              READ_CHUNK_SIZE);
     bulk.buff_size += bytes_read;
@@ -92,11 +101,9 @@ int main(int argc, char **argv) {
     }
 
     if (bytes_read <= 0) continue;
-
     show(bulk);
   }
 
   free(bulk.buff);
-  free(bulk.lines);
   return 0;
 }
