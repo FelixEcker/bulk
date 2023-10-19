@@ -62,6 +62,8 @@ typedef struct bulk_t {
   size_t *pages;
   size_t page_count;
   size_t current_page;
+
+  unsigned char action;
 } bulk_t;
 
 // SIGNAL HANDLERS
@@ -97,6 +99,7 @@ static int process_inputs(bulk_t *bulk) {
   if (read(2, &response, 1) <= 0)
     return FALSE;
 
+  bulk->action = response[0];
   switch (response[0]) {
   case 'n':
     ret = advance_page(bulk);
@@ -105,6 +108,7 @@ static int process_inputs(bulk_t *bulk) {
     ret = regress_page(bulk);
     break;
   case 'q':
+    ret = TRUE;
     bulk->quit = TRUE;
     break;
   }
@@ -163,6 +167,12 @@ static void show(bulk_t *bulk) {
   for (; nrow < bulk->nrows; nrow++)
     printf("\n");
 
+  if (bulk->minimal_mode == TRUE) {
+    fprintf(stdout, ":%c", bulk->action);
+    fflush(stdout);
+    return;
+  }
+
   char statusline[bulk->ncols];
   memset(statusline, 0x20, bulk->ncols);
   sprintf(statusline, " PAGE %zu/%zu", bulk->current_page + 1,
@@ -171,6 +181,7 @@ static void show(bulk_t *bulk) {
   statusline[bulk->ncols - 1] = 0;
   printf("\x1b[1m\x1b[%d;%dm%s\x1b[0m\n", STATUS_LINE_FG, STATUS_LINE_BG,
          statusline);
+  printf(":");
 }
 
 static void setup(bulk_t *bulk) {
@@ -195,13 +206,14 @@ int main(int argc, char **argv) {
       .linewrapping = TRUE,
       .color_enabled = TRUE,
       .style_enabled = TRUE,
-      .minimal_mode = FALSE,
+      .minimal_mode = TRUE,
       .buff = xmalloc(BASE_BUFF_SIZE),
       .buff_size = 0,
       .buff_allocd = BASE_BUFF_SIZE,
       .pages = xmalloc(sizeof(size_t)),
       .page_count = 1,
       .current_page = 0,
+      .action = '\0',
   };
   setup(&bulk);
 
@@ -230,6 +242,7 @@ int main(int argc, char **argv) {
     show(&bulk);
   }
 
+  printf("\n");
 #ifdef DEBUG_STATS
   printf("total buffer-bytes allocated: %zu\n", bulk.buff_allocd);
   printf("total bytes read: %zu\n", bulk.buff_size);
