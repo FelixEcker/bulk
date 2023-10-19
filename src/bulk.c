@@ -27,8 +27,12 @@
 // of bytes the buffer is enlarged by when it runs out of space
 #define READ_CHUNK_SIZE 2048
 
+#define READ_REALLOC_SIZE READ_CHUNK_SIZE
+
 #define STATUS_LINE_BG 44
 #define STATUS_LINE_FG 33
+
+#define DEBUG_STATS
 
 // Global Variable to stop bulk
 int gv_stop = FALSE;
@@ -128,7 +132,7 @@ static void show(bulk_t *bulk) {
     } else {
       ncol++;
     }
-    
+
     if (ncol > bulk->ncols || cols_overflowed == TRUE) {
       if (bulk->linewrapping == FALSE) {
         if (cols_overflowed == FALSE)
@@ -161,11 +165,12 @@ static void show(bulk_t *bulk) {
 
   char statusline[bulk->ncols];
   memset(statusline, 0x20, bulk->ncols);
-  sprintf(statusline, " PAGE %zu/%zu", 
-          bulk->current_page + 1, bulk->page_count);
+  sprintf(statusline, " PAGE %zu/%zu", bulk->current_page + 1,
+          bulk->page_count);
   statusline[strlen(statusline)] = ' ';
-  statusline[bulk->ncols-1] = 0;
-  printf("\x1b[%d;%dm%s\x1b[0m\n", STATUS_LINE_FG, STATUS_LINE_BG, statusline);
+  statusline[bulk->ncols - 1] = 0;
+  printf("\x1b[1m\x1b[%d;%dm%s\x1b[0m\n", STATUS_LINE_FG, STATUS_LINE_BG,
+         statusline);
 }
 
 static void setup(bulk_t *bulk) {
@@ -214,9 +219,9 @@ int main(int argc, char **argv) {
     size_t bytes_read =
         read(STDIN_FILENO, bulk.buff + bulk.buff_size, READ_CHUNK_SIZE);
     bulk.buff_size += bytes_read;
-    if (bulk.buff_size >= bulk.buff_allocd / 2) {
-      bulk.buff = xrealloc(bulk.buff, bulk.buff_allocd + READ_CHUNK_SIZE);
-      bulk.buff_allocd += READ_CHUNK_SIZE;
+    if (bulk.buff_size + READ_CHUNK_SIZE >= bulk.buff_allocd) {
+      bulk.buff = xrealloc(bulk.buff, bulk.buff_allocd + READ_REALLOC_SIZE);
+      bulk.buff_allocd += READ_REALLOC_SIZE;
     }
 
     if (process_inputs(&bulk) != TRUE && bytes_read <= 0)
@@ -224,6 +229,11 @@ int main(int argc, char **argv) {
 
     show(&bulk);
   }
+
+#ifdef DEBUG_STATS
+  printf("total buffer-bytes allocated: %zu\n", bulk.buff_allocd);
+  printf("total bytes read: %zu\n", bulk.buff_size);
+#endif
 
   teardown(bulk);
   free(bulk.pages);
