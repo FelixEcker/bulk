@@ -8,6 +8,7 @@
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <xmem.h>
 
@@ -22,6 +23,8 @@
 #define READ_CHUNK_SIZE 2048
 
 // TYPE DEFINITIONS
+
+int gv_stop = FALSE;
 
 typedef struct line_t {
   size_t start;
@@ -54,6 +57,14 @@ typedef struct bulk_t {
 
 // SIGNAL HANDLERS
 
+void signal_handler(int signum) {
+  switch (signum) {
+  case SIGINT:
+    gv_stop = TRUE;
+    break;
+  }
+}
+
 // INPUT FUNCTIONS
 
 static int advance_page(bulk_t *bulk) {
@@ -69,18 +80,23 @@ static int regress_page(bulk_t *bulk) {
 }
 
 static int process_inputs(bulk_t *bulk) {
-  FILE *fl = fdopen(2, "r");
-  unsigned char response = fgetc(fl);
-  switch (response) {
+  int ret = FALSE;
+
+  unsigned char response[1];
+  read(2, &response, 1);
+  switch (response[0]) {
   case 'n':
-    return advance_page(bulk);
+    ret = advance_page(bulk);
+    break;
   case 'b':
-    return regress_page(bulk);
+    ret = regress_page(bulk);
+    break;
   case 'q':
     bulk->quit = TRUE;
     break;
   }
-  return FALSE;
+
+  return ret;
 }
 
 // DISPLAY FUNCTIONS
@@ -120,6 +136,8 @@ static void setup(bulk_t *bulk) {
   new_term_attr.c_cc[VTIME] = 0;
   new_term_attr.c_cc[VMIN] = 0;
   tcsetattr(2, TCSANOW, &new_term_attr);
+
+  signal(SIGINT, signal_handler);
 }
 
 static void teardown(bulk_t bulk) {
@@ -151,7 +169,7 @@ int main(int argc, char **argv) {
   if (bulk.minimal_mode == FALSE)
     bulk.nrows -= 1;
 
-  while (bulk.quit == FALSE) {
+  while (bulk.quit == FALSE && gv_stop == FALSE) {
     size_t bytes_read = read(STDIN_FILENO, bulk.buff+bulk.buff_size, 
                              READ_CHUNK_SIZE);
     bulk.buff_size += bytes_read;
