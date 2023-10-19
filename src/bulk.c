@@ -3,7 +3,9 @@
 // Licensed under the BSD 3-Clause license
 
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
+#include <termios.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
@@ -27,12 +29,15 @@ typedef struct line_t {
 } line_t;
 
 typedef struct bulk_t {
+  int quit;
+
   // Config
   int color_enabled;
   int style_enabled;
   int minimal_mode;
 
   // Terminal Setup
+  struct termios orig_term_attr;
   unsigned char ncols;
   unsigned char nrows;
 
@@ -57,58 +62,84 @@ static int advance_page(bulk_t *bulk) {
   return TRUE;
 }
 
+static int regress_page(bulk_t *bulk) {
+  if (bulk->current_page == 0) return FALSE;
+  bulk->current_page--;
+  return TRUE;
+}
+
 static int process_inputs(bulk_t *bulk) {
-  char response;
-  while (read(2, &response, 1)) {
-    switch (response) {
-    case 'n':
-      return advance_page(bulk);
-    }
+  FILE *fl = fdopen(2, "r");
+  unsigned char response = fgetc(fl);
+  switch (response) {
+  case 'n':
+    return advance_page(bulk);
+  case 'b':
+    return regress_page(bulk);
+  case 'q':
+    bulk->quit = TRUE;
+    break;
   }
   return FALSE;
 }
 
 // DISPLAY FUNCTIONS
 
-static void show(bulk_t bulk) {
-  size_t page_start = bulk.pages[bulk.current_page];
+static void show(bulk_t *bulk) {
+  size_t page_start = bulk->pages[bulk->current_page];
 
   printf("\x1b[2J\x1b[0;0f");
 
   int page_ended = FALSE;
   unsigned char nrow = 0;
   size_t chr;
-  for (chr = page_start; chr < bulk.buff_size; chr++) {
-    if (bulk.buff[chr] == '\n') nrow++;
-    printf("%.*s", 1, bulk.buff + chr);
-    if (nrow >= bulk.nrows) {
+  for (chr = page_start; chr < bulk->buff_size; chr++) {
+    if (bulk->buff[chr] == '\n') nrow++;
+    printf("%.*s", 1, bulk->buff + chr);
+    if (nrow >= bulk->nrows) {
       page_ended = TRUE;
       break;
     }
   }
 
-  if (page_ended == TRUE && bulk.current_page + 1 >= bulk.page_count) {
-    bulk.pages = xrealloc(bulk.pages, sizeof(size_t) * (bulk.page_count + 1));
-    bulk.pages[bulk.page_count] = chr + 1;
-    bulk.page_count++;
+  if (page_ended == TRUE && bulk->current_page + 1 >= bulk->page_count) {
+    bulk->pages = xrealloc(bulk->pages, sizeof(size_t) * (bulk->page_count + 1));
+    bulk->pages[bulk->page_count] = chr + 1;
+    bulk->page_count++;
   }
 
-  for (; nrow < bulk.nrows; nrow++) printf("\n");
-  printf("PAGE %zu/%zu\n", bulk.current_page + 1, bulk.page_count);
+  for (; nrow < bulk->nrows; nrow++) printf("\n");
+  printf("PAGE %zu/%zu\n", bulk->current_page + 1, bulk->page_count);
+}
+
+static void setup(bulk_t *bulk) {
+  struct termios new_term_attr;
+  tcgetattr(2, &bulk->orig_term_attr);
+  memcpy(&new_term_attr, &bulk->orig_term_attr, sizeof(struct termios));
+  new_term_attr.c_lflag &= ~(ECHO|ICANON);
+  new_term_attr.c_cc[VTIME] = 0;
+  new_term_attr.c_cc[VMIN] = 0;
+  tcsetattr(2, TCSANOW, &new_term_attr);
+}
+
+static void teardown(bulk_t bulk) {
+  tcsetattr(2, TCSANOW, &bulk.orig_term_attr);
 }
 
 int main(int argc, char **argv) {
   bulk_t bulk = {
+    .quit = FALSE,
     .color_enabled = TRUE,
     .style_enabled = TRUE,
     .minimal_mode  = FALSE,
     .buff = xmalloc(BASE_BUFF_SIZE),
     .buff_size = 0,
     .buff_allocd = BASE_BUFF_SIZE,
-    .pages = malloc(sizeof(size_t)),
+    .pages = xmalloc(sizeof(size_t)),
     .page_count = 1,
     .current_page = 0
   };
+  setup(&bulk);
 
   bulk.pages[0] = 0;
 
@@ -120,7 +151,7 @@ int main(int argc, char **argv) {
   if (bulk.minimal_mode == FALSE)
     bulk.nrows -= 1;
 
-  while (1) {
+  while (bulk.quit == FALSE) {
     size_t bytes_read = read(STDIN_FILENO, bulk.buff+bulk.buff_size, 
                              READ_CHUNK_SIZE);
     bulk.buff_size += bytes_read;
@@ -129,11 +160,13 @@ int main(int argc, char **argv) {
       bulk.buff_allocd += READ_CHUNK_SIZE;
     }
 
-    if (bytes_read <= 0 && process_inputs(&bulk) != TRUE)
+    if (process_inputs(&bulk) != TRUE && bytes_read <= 0) 
       continue;
-    show(bulk);
+
+    show(&bulk);
   }
 
+  teardown(bulk);
   free(bulk.pages);
   free(bulk.buff);
   return 0;
