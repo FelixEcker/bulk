@@ -9,6 +9,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 
 #include <xmem.h>
 
@@ -22,14 +23,10 @@
 // of bytes the buffer is enlarged by when it runs out of space
 #define READ_CHUNK_SIZE 2048
 
-// TYPE DEFINITIONS
-
+// Global Variable to stop bulk
 int gv_stop = FALSE;
 
-typedef struct line_t {
-  size_t start;
-  size_t length;
-} line_t;
+// TYPE DEFINITIONS
 
 typedef struct bulk_t {
   int quit;
@@ -82,8 +79,10 @@ static int regress_page(bulk_t *bulk) {
 static int process_inputs(bulk_t *bulk) {
   int ret = FALSE;
 
-  unsigned char response[1];
-  read(2, &response, 1);
+  static unsigned char response[1];
+  if (read(2, &response, 1) <= 0)
+    return FALSE;
+
   switch (response[0]) {
   case 'n':
     ret = advance_page(bulk);
@@ -155,7 +154,7 @@ int main(int argc, char **argv) {
     .buff_allocd = BASE_BUFF_SIZE,
     .pages = xmalloc(sizeof(size_t)),
     .page_count = 1,
-    .current_page = 0
+    .current_page = 0,
   };
   setup(&bulk);
 

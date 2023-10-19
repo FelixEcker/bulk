@@ -1,4 +1,7 @@
 // xmem.h ; wrapper functions for std. memory functions
+// part of the bulk pager.
+// Copyright (c) 2023, Marie Eckert
+// Licensed under the BSD 3-Clause License
 // -----------------------------------------------------------------------------
 // If any of the wrapped functions fail, the calling program
 // will be aborted.

@@ -1,3 +1,8 @@
+// xmem.c ; wrapper functions for std. memory functions
+// part of the bulk pager.
+// Copyright (c) 2023, Marie Eckert
+// Licensed under the BSD 3-Clause License
+
 #include <xmem.h>
 
 void *xmalloc(size_t size) {
