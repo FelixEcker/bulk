@@ -2,6 +2,11 @@
 // Copyright (c) 2023, Marie Eckert
 // Licensed under the BSD 3-Clause license
 
+// TODO: Recognize all escaped chars and exclude them from the column counts
+// TODO: Prettier
+// TODO: Minimal Mode
+// TODO: ARG PARSING
+
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +27,9 @@
 // of bytes the buffer is enlarged by when it runs out of space
 #define READ_CHUNK_SIZE 2048
 
+#define STATUS_LINE_BG 44
+#define STATUS_LINE_FG 33
+
 // Global Variable to stop bulk
 int gv_stop = FALSE;
 
@@ -31,6 +39,7 @@ typedef struct bulk_t {
   int quit;
 
   // Config
+  int linewrapping;
   int color_enabled;
   int style_enabled;
   int minimal_mode;
@@ -106,12 +115,33 @@ static void show(bulk_t *bulk) {
 
   printf("\x1b[2J\x1b[0;0f");
 
+  int cols_overflowed = FALSE;
   int page_ended = FALSE;
   unsigned char nrow = 0;
+  unsigned char ncol = 0;
   size_t chr;
   for (chr = page_start; chr < bulk->buff_size; chr++) {
-    if (bulk->buff[chr] == '\n')
+    if (bulk->buff[chr] == '\n') {
       nrow++;
+      ncol = 0;
+      cols_overflowed = FALSE;
+    } else {
+      ncol++;
+    }
+    
+    if (ncol > bulk->ncols || cols_overflowed == TRUE) {
+      if (bulk->linewrapping == FALSE) {
+        if (cols_overflowed == FALSE)
+          printf("\x1b[1D\x1b[1C$");
+
+        cols_overflowed = TRUE;
+        continue;
+      }
+      printf("\n");
+      cols_overflowed = FALSE;
+      ncol = 0;
+    }
+
     printf("%.*s", 1, bulk->buff + chr);
     if (nrow >= bulk->nrows) {
       page_ended = TRUE;
@@ -128,7 +158,14 @@ static void show(bulk_t *bulk) {
 
   for (; nrow < bulk->nrows; nrow++)
     printf("\n");
-  printf("PAGE %zu/%zu\n", bulk->current_page + 1, bulk->page_count);
+
+  char statusline[bulk->ncols];
+  memset(statusline, 0x20, bulk->ncols);
+  sprintf(statusline, " PAGE %zu/%zu", 
+          bulk->current_page + 1, bulk->page_count);
+  statusline[strlen(statusline)] = ' ';
+  statusline[bulk->ncols-1] = 0;
+  printf("\x1b[%d;%dm%s\x1b[0m\n", STATUS_LINE_FG, STATUS_LINE_BG, statusline);
 }
 
 static void setup(bulk_t *bulk) {
@@ -150,6 +187,7 @@ static void teardown(bulk_t bulk) {
 int main(int argc, char **argv) {
   bulk_t bulk = {
       .quit = FALSE,
+      .linewrapping = TRUE,
       .color_enabled = TRUE,
       .style_enabled = TRUE,
       .minimal_mode = FALSE,
@@ -176,7 +214,7 @@ int main(int argc, char **argv) {
     size_t bytes_read =
         read(STDIN_FILENO, bulk.buff + bulk.buff_size, READ_CHUNK_SIZE);
     bulk.buff_size += bytes_read;
-    if (bulk.buff_size >= bulk.buff_allocd) {
+    if (bulk.buff_size >= bulk.buff_allocd / 2) {
       bulk.buff = xrealloc(bulk.buff, bulk.buff_allocd + READ_CHUNK_SIZE);
       bulk.buff_allocd += READ_CHUNK_SIZE;
     }
