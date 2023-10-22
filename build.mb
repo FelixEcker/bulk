@@ -3,17 +3,19 @@ sector .config
   ; author: Marie Eckert
 
   fields depends:
-    str includes '-Isrc/'
+    str sources 'deps/cansid/cansid.c'
+    str includes '-Isrc/ -Idepends/'
 
   fields mariebuild:
     str binname   'bulk'
     str compiler 'clang'
 
-    list files 'xmem.c:bulk.c'
+    list sources 'src/xmem.c:src/bulk.c' 
+    list files '$(depends/sources):$(sources)'
 
     str std_flags     '-Wall $(depends/includes) -c -o'
     str debug_flags   '-ggdb'
     str release_flags '-O3'
 
-    str comp_cmd '$(compiler) $(mode_flags) $(std_flags) out/$(file).o src/$(file)'
+    str comp_cmd '$(compiler) $(mode_flags) $(std_flags) out/$(file).o $(file)'
     str finalize_cmd '$(compiler) $(mode_flags) -o $(binname) out/$(files).o'
