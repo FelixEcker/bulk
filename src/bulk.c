@@ -14,8 +14,11 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
+#include <argp.h>
 
 #include <xmem.h>
+
+#define VERSION_STRING "bulk 0.0.0"
 
 #define FALSE 0
 #define TRUE 1
@@ -167,13 +170,11 @@ static void show(bulk_t *bulk) {
   for (; nrow < bulk->nrows; nrow++)
     printf("\n");
 
-  if (bulk->minimal_mode == TRUE) {
-    fprintf(stdout, ":%c", bulk->action);
-    fflush(stdout);
-    return;
-  }
-
   char statusline[bulk->ncols];
+
+  if (bulk->minimal_mode == TRUE)
+    goto show_action_line;
+
   memset(statusline, 0x20, bulk->ncols);
   sprintf(statusline, " PAGE %zu/%zu", bulk->current_page + 1,
           bulk->page_count);
@@ -181,7 +182,10 @@ static void show(bulk_t *bulk) {
   statusline[bulk->ncols - 1] = 0;
   printf("\x1b[1m\x1b[%d;%dm%s\x1b[0m\n", STATUS_LINE_FG, STATUS_LINE_BG,
          statusline);
-  printf(":");
+
+show_action_line:
+  fprintf(stdout, ":%c", bulk->action);
+  fflush(stdout);
 }
 
 static void setup(bulk_t *bulk) {
@@ -200,13 +204,64 @@ static void teardown(bulk_t bulk) {
   tcsetattr(2, TCSANOW, &bulk.orig_term_attr);
 }
 
+// STARTUP FUNCTIONS
+
+const char *argp_program_version = VERSION_STRING;
+const char *argp_program_bug_address =
+  "https://github.com/FelixEcker/bulk/issues";
+const char description[] =
+  "A simple pager; less than less but more like most\n"
+  "Author: Marie Eckert";
+const char args_doc[] = "";
+
+static struct argp_option options[] = {
+  {"no-color", 'c', 0, 0, "Check if a build file is valid"}
+, {"no-style", 's', 0, 0, "Check if a build file is valid"}
+, {"line-wrapping", 'w', 0, 0, "Check if a build file is valid"}
+, {"minimal", '\0', 0, 0, "Check if a build file is valid"}
+, {0, 0, 0, 0}
+};
+
+struct arguments {
+  char *build_file;
+  char *exec_script;
+  int check_file;
+  char *mode;
+  char *platform;
+  int disable_extensions;
+  int  log_level;
+  int print_structure;
+};
+
+static error_t parse_opt(int key, char *arg, struct argp_state *state) {
+  struct arguments *args = state->input;
+  switch (key) {
+  case 'i': args->build_file = arg; break;
+  case 'e': args->exec_script = arg; break;
+  case 'c': args->check_file = TRUE; break;
+  case 'm': args->mode = arg; break;
+  case 'p': args->platform = arg; break;
+  case 'd': args->disable_extensions = TRUE; break;
+//  case 'q': args->log_level = MB_LOGLVL_IMP; break;
+//  case 'v': args->log_level = MB_LOGLVL_LOW; break;
+  case 's': args->print_structure = TRUE; break;
+  default: return ARGP_ERR_UNKNOWN;
+  }
+
+  return 0;
+}
+
+static struct argp argp = { options, parse_opt, args_doc, description };
+
 int main(int argc, char **argv) {
+  struct arguments args;
+  argp_parse(&argp, argc, argv, 0, 0, &args);
   bulk_t bulk = {
       .quit = FALSE,
       .linewrapping = TRUE,
       .color_enabled = TRUE,
       .style_enabled = TRUE,
-      .minimal_mode = TRUE,
+      .minimal_mode = FALSE,
       .buff = xmalloc(BASE_BUFF_SIZE),
       .buff_size = 0,
       .buff_allocd = BASE_BUFF_SIZE,
