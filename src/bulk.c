@@ -223,28 +223,19 @@ static struct argp_option options[] = {
 };
 
 struct arguments {
-  char *build_file;
-  char *exec_script;
-  int check_file;
-  char *mode;
-  char *platform;
-  int disable_extensions;
-  int  log_level;
-  int print_structure;
+  int no_color;
+  int no_style;
+  int line_wrapping;
+  int minimal;
 };
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   struct arguments *args = state->input;
   switch (key) {
-  case 'i': args->build_file = arg; break;
-  case 'e': args->exec_script = arg; break;
-  case 'c': args->check_file = TRUE; break;
-  case 'm': args->mode = arg; break;
-  case 'p': args->platform = arg; break;
-  case 'd': args->disable_extensions = TRUE; break;
-//  case 'q': args->log_level = MB_LOGLVL_IMP; break;
-//  case 'v': args->log_level = MB_LOGLVL_LOW; break;
-  case 's': args->print_structure = TRUE; break;
+  case 'c': args->no_color = TRUE; break;
+  case 's': args->no_style = TRUE; break;
+  case 'w': args->line_wrapping = TRUE; break;
+  case '\0': args->minimal = TRUE; break;
   default: return ARGP_ERR_UNKNOWN;
   }
 
@@ -256,12 +247,13 @@ static struct argp argp = { options, parse_opt, args_doc, description };
 int main(int argc, char **argv) {
   struct arguments args;
   argp_parse(&argp, argc, argv, 0, 0, &args);
+
   bulk_t bulk = {
       .quit = FALSE,
-      .linewrapping = TRUE,
-      .color_enabled = TRUE,
-      .style_enabled = TRUE,
-      .minimal_mode = FALSE,
+      .linewrapping = args.line_wrapping,
+      .color_enabled = ~args.no_color,
+      .style_enabled = ~args.no_style,
+      .minimal_mode = args.minimal,
       .buff = xmalloc(BASE_BUFF_SIZE),
       .buff_size = 0,
       .buff_allocd = BASE_BUFF_SIZE,
