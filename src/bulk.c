@@ -5,7 +5,6 @@
 // TODO: Recognize all escaped chars and exclude them from the column counts
 // TODO: Prettier
 // TODO: Minimal Mode
-// TODO: ARG PARSING
 
 #include <signal.h>
 #include <stdio.h>
@@ -215,10 +214,10 @@ const char description[] =
 const char args_doc[] = "";
 
 static struct argp_option options[] = {
-  {"no-color", 'c', 0, 0, "Check if a build file is valid"}
-, {"no-style", 's', 0, 0, "Check if a build file is valid"}
-, {"line-wrapping", 'w', 0, 0, "Check if a build file is valid"}
-, {"minimal", '\0', 0, 0, "Check if a build file is valid"}
+  {"no-color", 'c', 0, 0, "Disable colored output"}
+, {"no-style", 's', 0, 0, "Disable styled output"}
+, {"line-wrapping", 'w', 0, 0, "Enable linewrapping"}
+, {"minimal", '\0', 0, 0, "Enable minimal interface"}
 , {0, 0, 0, 0}
 };
 
