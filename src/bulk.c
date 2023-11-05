@@ -6,6 +6,9 @@
 // TODO: Prettier
 // TODO: Minimal Mode
 
+#include <argp.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +16,6 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
-#include <argp.h>
 
 #include <xmem.h>
 
@@ -55,6 +57,9 @@ typedef struct bulk_t {
   unsigned char ncols;
   unsigned char nrows;
 
+  // Source fileno
+  int fileno;
+
   // Buffer
   char *buff;
   size_t buff_size;
@@ -67,6 +72,27 @@ typedef struct bulk_t {
 
   unsigned char action;
 } bulk_t;
+
+// UTILS
+
+static int open_file(int *dfileno, char *path) {
+  if (path == NULL) {
+    printf("Can't open file; Filename is a null-pointer\n");
+    return FALSE;
+  }
+
+  errno = 0;
+
+  *dfileno = open(path, O_RDONLY);
+  if (*dfileno == -1) {
+    printf("Error opening file \"%s\": %s\n", path, strerror(errno));
+    return FALSE;
+  }
+
+  printf("%d\n", *dfileno);
+
+  return TRUE;
+}
 
 // SIGNAL HANDLERS
 
@@ -207,19 +233,17 @@ static void teardown(bulk_t bulk) {
 
 const char *argp_program_version = VERSION_STRING;
 const char *argp_program_bug_address =
-  "https://github.com/FelixEcker/bulk/issues";
-const char description[] =
-  "A simple pager; less than less but more like most\n"
-  "Author: Marie Eckert";
+    "https://github.com/FelixEcker/bulk/issues";
+const char description[] = "A simple pager; less than less but more like most\n"
+                           "Author: Marie Eckert";
 const char args_doc[] = "";
 
 static struct argp_option options[] = {
-  {"no-color", 'c', 0, 0, "Disable colored output"}
-, {"no-style", 's', 0, 0, "Disable styled output"}
-, {"line-wrapping", 'w', 0, 0, "Enable linewrapping"}
-, {"minimal", '\0', 0, 0, "Enable minimal interface"}
-, {0, 0, 0, 0}
-};
+    {"no-color", 'c', 0, 0, "Disable colored output"},
+    {"no-style", 's', 0, 0, "Disable styled output"},
+    {"line-wrapping", 'w', 0, 0, "Enable linewrapping"},
+    {"minimal", 'm', 0, 0, "Enable minimal interface"},
+    {0, 0, 0, 0}};
 
 struct arguments {
   int no_color;
@@ -231,21 +255,30 @@ struct arguments {
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   struct arguments *args = state->input;
   switch (key) {
-  case 'c': args->no_color = TRUE; break;
-  case 's': args->no_style = TRUE; break;
-  case 'w': args->line_wrapping = TRUE; break;
-  case '\0': args->minimal = TRUE; break;
-  default: return ARGP_ERR_UNKNOWN;
+  case 'c':
+    args->no_color = TRUE;
+    break;
+  case 's':
+    args->no_style = TRUE;
+    break;
+  case 'w':
+    args->line_wrapping = TRUE;
+    break;
+  case 'm':
+    args->minimal = TRUE;
+    break;
+  default:
+    return ARGP_ERR_UNKNOWN;
   }
 
   return 0;
 }
 
-static struct argp argp = { options, parse_opt, args_doc, description };
+static struct argp argp = {options, parse_opt, args_doc, description};
 
 int main(int argc, char **argv) {
   struct arguments args;
-  argp_parse(&argp, argc, argv, 0, 0, &args);
+  argp_parse(&argp, argc, argv, ARGP_NO_ERRS, 0, &args);
 
   bulk_t bulk = {
       .quit = FALSE,
@@ -273,9 +306,20 @@ int main(int argc, char **argv) {
   if (bulk.minimal_mode == FALSE)
     bulk.nrows -= 1;
 
+  if (!isatty(STDIN_FILENO)) {
+    bulk.fileno = STDIN_FILENO;
+  } else if (argc > 1) {
+    if (open_file(&bulk.fileno, argv[argc - 1]) == FALSE)
+      goto bulk_exit;
+  } else {
+    printf("no input specified! either redirect other program output into\n"
+           "bulk or specify a file as the /last/ argument.\n");
+    goto bulk_exit;
+  }
+
   while (bulk.quit == FALSE && gv_stop == FALSE) {
     size_t bytes_read =
-        read(STDIN_FILENO, bulk.buff + bulk.buff_size, READ_CHUNK_SIZE);
+        read(bulk.fileno, bulk.buff + bulk.buff_size, READ_CHUNK_SIZE);
     bulk.buff_size += bytes_read;
     if (bulk.buff_size + READ_CHUNK_SIZE >= bulk.buff_allocd) {
       bulk.buff = xrealloc(bulk.buff, bulk.buff_allocd + READ_REALLOC_SIZE);
@@ -294,6 +338,7 @@ int main(int argc, char **argv) {
   printf("total bytes read: %zu\n", bulk.buff_size);
 #endif
 
+bulk_exit:
   teardown(bulk);
   free(bulk.pages);
   free(bulk.buff);
