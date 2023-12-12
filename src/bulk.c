@@ -167,10 +167,11 @@ static void show(bulk_t *bulk) {
       cols_overflowed = FALSE;
       ansi_parse_state = NONE;
     } else {
-      if (ansi_parse(bulk->buff[chr], &ansi_parse_state)) {
+      if (ansi_parse(bulk->buff[chr], &ansi_parse_state) == 1) {
         ncol++;
-      } else if (bulk->color_enabled == FALSE)
+      } else if (bulk->color_enabled == FALSE) {
         continue;
+      }
     }
 
     if (ncol > bulk->ncols || cols_overflowed == TRUE) {
@@ -254,8 +255,8 @@ static struct argp_option options[] = {
     {0, 0, 0, 0}};
 
 struct arguments {
-  int no_color;
-  int no_style;
+  int color;
+  int style;
   int line_wrapping;
   int minimal;
 };
@@ -264,10 +265,10 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
   struct arguments *args = state->input;
   switch (key) {
   case 'c':
-    args->no_color = TRUE;
+    args->color = FALSE;
     break;
   case 's':
-    args->no_style = TRUE;
+    args->style = FALSE;
     break;
   case 'w':
     args->line_wrapping = TRUE;
@@ -291,8 +292,8 @@ int main(int argc, char **argv) {
   bulk_t bulk = {
       .quit = FALSE,
       .linewrapping = args.line_wrapping,
-      .color_enabled = ~args.no_color,
-      .style_enabled = ~args.no_style,
+      .color_enabled = args.color,
+      .style_enabled = args.style,
       .minimal_mode = args.minimal,
       .buff = xmalloc(BASE_BUFF_SIZE),
       .buff_size = 0,
