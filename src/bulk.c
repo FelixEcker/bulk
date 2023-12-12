@@ -6,6 +6,9 @@
 // TODO: Prettier
 // TODO: Minimal Mode
 
+#include "ansi_parse.h"
+#include "xmem.h"
+
 #include <argp.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -16,8 +19,6 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
-
-#include <xmem.h>
 
 #define VERSION_STRING "bulk 0.0.0"
 
@@ -156,13 +157,20 @@ static void show(bulk_t *bulk) {
   unsigned char nrow = 0;
   unsigned char ncol = 0;
   size_t chr;
+
+  ansi_parser_state_t ansi_parse_state = NONE;
+
   for (chr = page_start; chr < bulk->buff_size; chr++) {
     if (bulk->buff[chr] == '\n') {
       nrow++;
       ncol = 0;
       cols_overflowed = FALSE;
+      ansi_parse_state = NONE;
     } else {
-      ncol++;
+      if (ansi_parse(bulk->buff[chr], &ansi_parse_state)) {
+        ncol++;
+      } else if (bulk->color_enabled == FALSE)
+        continue;
     }
 
     if (ncol > bulk->ncols || cols_overflowed == TRUE) {

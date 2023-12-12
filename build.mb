@@ -3,14 +3,14 @@ sector .config
   ; author: Marie Eckert
 
   fields depends:
-    str sources 'deps/cansid/cansid.c'
-    str includes '-Isrc/ -Idepends/'
+    str sources ''
+    str includes '-Isrc/'
 
   fields mariebuild:
     str binname   'bulk'
     str compiler 'clang'
 
-    list sources 'src/xmem.c:src/bulk.c' 
+    list sources 'src/xmem.c:src/ansi_parse.c:src/bulk.c' 
     list files '$(depends/sources):$(sources)'
 
     str std_flags     '-Wall $(depends/includes) -c -o'
