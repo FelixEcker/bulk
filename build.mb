@@ -21,3 +21,8 @@ sector .config
     str finalize_cmd '$(compiler) $(mode_flags) -o $(binname) out/$(files).o'
 
 sector .scripts
+  lines prepare:
+#!/bin/sh
+if [ ! -d out/src/ ]; then
+  mkdir -p out/src/
+fi
